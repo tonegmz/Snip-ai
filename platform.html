@@ -1,1 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnipAI - Platform Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.js">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #e5e7eb;
+        }
+        .clip-card:hover .play-button {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-black">
+    <!-- Header -->
+    <header class="bg-gray-900/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40">
+        <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                    <span class="text-white text-xl font-bold">SnipAI Platform</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Sign In
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <div class="relative max-w-2xl mx-auto mb-6">
+                 <svg class="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" placeholder="Search for clips... e.g., 'Tom Cruise running' or 'explosion'" class="w-full bg-gray-900 text-white pl-14 pr-4 py-4 rounded-xl border border-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-lg transition-colors" />
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-400 text-sm">Showing 4 sample clips</span>
+            </div>
+        </div>
+        
+        <!-- Clip Grid -->
+        <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <!-- Clip Card 1 -->
+            <div class="group relative bg-gray-900 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20 clip-card">
+                <div class="relative aspect-video">
+                    <img src="https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&h=300&fit=crop" alt="Tom Cruise running scene" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 play-button">
+                        <button class="bg-white/20 backdrop-blur-sm rounded-full p-4 hover:bg-white/30 transition-colors">
+                            <svg class="w-8 h-8 text-white ml-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="absolute top-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-mono">00:03</div>
+                    <div class="absolute top-3 left-3 bg-blue-500/80 text-white text-xs px-2 py-1 rounded-md font-semibold">Action</div>
+                </div>
+                <div class="p-4">
+                    <h3 class="text-white font-medium text-sm mb-2 truncate">Tom Cruise running scene</h3>
+                    <div class="flex items-center justify-between text-gray-400 text-xs mb-3">
+                        <span>2.1K views</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Clip Card 2 -->
+            <div class="group relative bg-gray-900 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/20 clip-card">
+                <div class="relative aspect-video">
+                    <img src="https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop" alt="Explosion in slow motion" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 play-button">
+                        <button class="bg-white/20 backdrop-blur-sm rounded-full p-4 hover:bg-white/30 transition-colors">
+                            <svg class="w-8 h-8 text-white ml-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="absolute top-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-mono">00:05</div>
+                    <div class="absolute top-3 left-3 bg-purple-500/80 text-white text-xs px-2 py-1 rounded-md font-semibold">Effects</div>
+                </div>
+                <div class="p-4">
+                    <h3 class="text-white font-medium text-sm mb-2 truncate">Explosion in slow motion</h3>
+                    <div class="flex items-center justify-between text-gray-400 text-xs mb-3">
+                        <span>5.7K views</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Clip Card 3 -->
+            <div class="group relative bg-gray-900 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-pink-500/20 clip-card">
+                <div class="relative aspect-video">
+                    <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop" alt="Emotional reaction close-up" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 play-button">
+                        <button class="bg-white/20 backdrop-blur-sm rounded-full p-4 hover:bg-white/30 transition-colors">
+                            <svg class="w-8 h-8 text-white ml-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="absolute top-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-mono">00:04</div>
+                    <div class="absolute top-3 left-3 bg-pink-500/80 text-white text-xs px-2 py-1 rounded-md font-semibold">Drama</div>
+                </div>
+                <div class="p-4">
+                    <h3 class="text-white font-medium text-sm mb-2 truncate">Emotional reaction close-up</h3>
+                    <div class="flex items-center justify-between text-gray-400 text-xs mb-3">
+                        <span>1.8K views</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Clip Card 4 -->
+            <div class="group relative bg-gray-900 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-cyan-500/20 clip-card">
+                <div class="relative aspect-video">
+                    <img src="https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=300&fit=crop" alt="City skyline time-lapse" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 play-button">
+                        <button class="bg-white/20 backdrop-blur-sm rounded-full p-4 hover:bg-white/30 transition-colors">
+                           <svg class="w-8 h-8 text-white ml-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"></path></svg>
+                        </button>
+                    </div>
+                    <div class="absolute top-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-mono">00:08</div>
+                    <div class="absolute top-3 left-3 bg-cyan-500/80 text-white text-xs px-2 py-1 rounded-md font-semibold">Urban</div>
+                </div>
+                <div class="p-4">
+                    <h3 class="text-white font-medium text-sm mb-2 truncate">City skyline time-lapse</h3>
+                    <div class="flex items-center justify-between text-gray-400 text-xs mb-3">
+                        <span>3.2K views</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
 
