@@ -1,1 +1,593 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Play, Pause, Download, Heart, Sparkles, Video, Upload, Filter, Grid, List, Settings, Zap, Scissors, Camera, FileImage, X, SkipBack, SkipForward, User, LogOut } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, collection, addDoc, deleteDoc, setDoc, query, getDocs, serverTimestamp } from 'firebase/firestore';
+
+// --- Firebase Configuration ---
+// NOTE: These variables are placeholders and will be populated by the environment.
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-snip-ai-app';
+
+const SnipAI = () => {
+  // --- Firebase State ---
+  const [auth, setAuth] = useState(null);
+  const [db, setDb] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // --- App State ---
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('search');
+  const [viewMode, setViewMode] = useState('grid');
+  const [playingVideo, setPlayingVideo] = useState(null);
+  const [favorites, setFavorites] = useState(new Set());
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [editingClip, setEditingClip] = useState(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [clips, setClips] = useState([]);
+  const [filteredClips, setFilteredClips] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- Firebase Initialization and Authentication ---
+  useEffect(() => {
+    try {
+      const app = initializeApp(firebaseConfig);
+      const authInstance = getAuth(app);
+      const dbInstance = getFirestore(app);
+      setAuth(authInstance);
+      setDb(dbInstance);
+
+      const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+        if (user) {
+          setUserId(user.uid);
+        } else {
+          try {
+            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            if (token) {
+              await signInWithCustomToken(authInstance, token);
+            } else {
+              await signInAnonymously(authInstance);
+            }
+          } catch (error) {
+            console.error("Authentication failed:", error);
+          }
+        }
+        setIsAuthReady(true);
+      });
+      return () => unsubscribe();
+    } catch (error) {
+      console.error("Firebase initialization failed:", error);
+      setIsAuthReady(true); // Allow app to proceed even if firebase fails
+    }
+  }, []);
+
+  // --- Data Fetching: Clips ---
+  useEffect(() => {
+    if (!isAuthReady || !db) return;
+
+    setIsLoading(true);
+    const clipsCollectionPath = `/artifacts/${appId}/public/data/clips`;
+    const q = query(collection(db, clipsCollectionPath));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const clipsData = [];
+      querySnapshot.forEach((doc) => {
+        clipsData.push({ id: doc.id, ...doc.data() });
+      });
+      
+      // Sort by timestamp, newest first
+      clipsData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+      setClips(clipsData);
+      setFilteredClips(clipsData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching clips:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, db, appId]);
+
+  // --- Data Fetching: Favorites ---
+  useEffect(() => {
+    if (!isAuthReady || !db || !userId) return;
+
+    const favoritesCollectionPath = `/artifacts/${appId}/users/${userId}/favorites`;
+    const q = query(collection(db, favoritesCollectionPath));
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const favoriteIds = new Set();
+      querySnapshot.forEach((doc) => {
+        favoriteIds.add(doc.id);
+      });
+      setFavorites(favoriteIds);
+    }, (error) => {
+      console.error("Error fetching favorites:", error);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, db, userId, appId]);
+  
+  // --- Search Logic ---
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredClips(clips);
+      return;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    const filtered = clips.filter(clip =>
+      clip.title.toLowerCase().includes(lowercasedQuery) ||
+      (clip.tags && clip.tags.some(tag => tag.toLowerCase().includes(lowercasedQuery))) ||
+      (clip.category && clip.category.toLowerCase().includes(lowercasedQuery))
+    );
+    setFilteredClips(filtered);
+  }, [searchQuery, clips]);
+
+
+  // --- Core Functions ---
+
+  const handleSignOut = async () => {
+    if (!auth) return;
+    try {
+      await signOut(auth);
+      setUserId(null);
+      // Re-authenticate anonymously after sign out
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  const togglePlayback = (clipId) => {
+    setPlayingVideo(playingVideo === clipId ? null : clipId);
+  };
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+  };
+
+  const toggleFavorite = async (clipId) => {
+    if (!db || !userId) return;
+    const newFavorites = new Set(favorites);
+    const favoriteDocRef = doc(db, `/artifacts/${appId}/users/${userId}/favorites`, clipId);
+
+    try {
+      if (newFavorites.has(clipId)) {
+        await deleteDoc(favoriteDocRef);
+        newFavorites.delete(clipId);
+      } else {
+        await setDoc(favoriteDocRef, { favoritedAt: serverTimestamp() });
+        newFavorites.add(clipId);
+      }
+      setFavorites(newFavorites);
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    }
+  };
+
+  const openEditor = (clip) => {
+    setEditingClip(clip);
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingClip(null);
+  };
+
+  const generateClip = async (prompt) => {
+    if (!db) {
+        console.error("Database not initialized");
+        return;
+    }
+    setIsGenerating(true);
+    setGenerationProgress(0);
+
+    // Simulate AI generation progress
+    const progressInterval = setInterval(() => {
+      setGenerationProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 100);
+
+    // Simulate network delay and save to Firestore
+    setTimeout(async () => {
+      const newClip = {
+        title: `Generated: ${prompt.substring(0, 30)}${prompt.length > 30 ? '...' : ''}`,
+        duration: "00:05",
+        tags: ["ai-generated", "custom", ...prompt.toLowerCase().split(' ').slice(0,2)],
+        thumbnail: `https://placehold.co/400x300/1a202c/718096?text=AI+Clip`,
+        views: Math.floor(Math.random() * 100) + 1,
+        category: "AI Generated",
+        createdAt: serverTimestamp()
+      };
+
+      try {
+        const clipsCollectionPath = `/artifacts/${appId}/public/data/clips`;
+        await addDoc(collection(db, clipsCollectionPath), newClip);
+        // The onSnapshot listener will automatically update the UI
+      } catch (error) {
+        console.error("Error adding new clip to Firestore:", error);
+      } finally {
+        setIsGenerating(false);
+        setGenerationProgress(0);
+        setActiveTab('search'); // Switch to search tab to see the new clip
+      }
+    }, 5000); // 5-second generation simulation
+  };
+  
+  // --- Sub-Components ---
+
+  const ClipCard = ({ clip }) => (
+    <div className="group relative bg-gray-900 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20">
+      <div className="relative aspect-video">
+        <img
+          src={clip.thumbnail}
+          alt={clip.title}
+          className="w-full h-full object-cover"
+          onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/400x300/1a202c/718096?text=Image+Error'; }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40">
+          <button
+            onClick={() => togglePlayback(clip.id)}
+            className="bg-white/20 backdrop-blur-sm rounded-full p-4 hover:bg-white/30 transition-colors"
+          >
+            {playingVideo === clip.id ? (
+              <Pause className="w-8 h-8 text-white" />
+            ) : (
+              <Play className="w-8 h-8 text-white ml-1" />
+            )}
+          </button>
+        </div>
+
+        <div className="absolute top-3 right-3 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-mono">
+          {clip.duration}
+        </div>
+
+        <div className="absolute top-3 left-3 bg-blue-500/80 text-white text-xs px-2 py-1 rounded-md font-semibold">
+          {clip.category}
+        </div>
+      </div>
+
+      <div className="p-4">
+        <h3 className="text-white font-medium text-sm mb-2 truncate">{clip.title}</h3>
+
+        <div className="flex items-center justify-between text-gray-400 text-xs mb-3">
+          <span>{clip.views} views</span>
+          <div className="flex gap-1 flex-wrap">
+            {clip.tags?.slice(0, 2).map(tag => (
+              <span key={tag} className="bg-gray-800 px-2 py-1 rounded-full">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => toggleFavorite(clip.id)}
+            className={`p-2 rounded-lg transition-colors ${
+              favorites.has(clip.id)
+                ? 'bg-red-500/90 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            <Heart className="w-4 h-4" />
+          </button>
+          <button className="p-2 bg-gray-800 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors">
+            <Download className="w-4 h-4" />
+          </button>
+          <button
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            onClick={() => openEditor(clip)}
+          >
+            Use Clip
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const GenerationPanel = () => {
+    const [prompt, setPrompt] = useState('');
+
+    return (
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+          <h2 className="text-white text-xl font-bold mb-4 flex items-center gap-2">
+            <Sparkles className="w-6 h-6 text-blue-500" />
+            AI Clip Generation
+          </h2>
+
+          <div className="space-y-4">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g., A person running through a neon-lit alley in the rain..."
+              className="w-full bg-gray-800 text-white rounded-lg p-4 border border-gray-700 focus:border-blue-500 focus:outline-none resize-none transition-colors"
+              rows={4}
+            />
+
+            <button
+              onClick={() => generateClip(prompt)}
+              disabled={!prompt.trim() || isGenerating}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Generating... {generationProgress}%
+                </>
+              ) : (
+                <>
+                  <Zap className="w-5 h-5" />
+                  Generate Clip
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ClipEditor = () => {
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration] = useState(parseFloat(editingClip?.duration?.split(':')[1]) || 8);
+    const [trimStart, setTrimStart] = useState(0);
+    const [trimEnd, setTrimEnd] = useState(duration);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [activeEditorTab, setActiveEditorTab] = useState('trim');
+
+    return (
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex animate-fade-in">
+        <div className="flex-1 flex flex-col">
+          <header className="flex items-center justify-between p-6 border-b border-gray-800">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={closeEditor}
+                className="text-gray-400 hover:text-white p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <div>
+                <h2 className="text-white text-xl font-bold">{editingClip?.title}</h2>
+                <p className="text-gray-400 text-sm">Clip Editor</p>
+              </div>
+            </div>
+
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          </header>
+
+          <main className="flex-1 flex items-center justify-center p-8">
+            <div className="relative max-w-4xl w-full">
+              <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-2xl shadow-blue-500/20">
+                <img
+                  src={editingClip?.thumbnail}
+                  alt={editingClip?.title}
+                  className="w-full h-full object-cover"
+                   onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1280x720/1a202c/718096?text=Image+Error'; }}
+                />
+
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="bg-black/50 backdrop-blur-sm rounded-full p-6 hover:bg-black/70 transition-colors"
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-12 h-12 text-white" />
+                    ) : (
+                      <Play className="w-12 h-12 text-white ml-2" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="absolute bottom-4 left-4 right-4">
+                  <div className="bg-black/70 backdrop-blur-md rounded-lg p-3">
+                    <div className="flex items-center justify-between text-white text-sm mb-2 font-mono">
+                      <span>{trimStart.toFixed(1)}s</span>
+                      <span>{currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
+                      <span>{trimEnd.toFixed(1)}s</span>
+                    </div>
+
+                    <div className="relative h-2 bg-gray-700 rounded-full cursor-pointer group">
+                      <div className="absolute inset-0 bg-gray-600 rounded-full" />
+                      <div
+                        className="absolute h-full bg-blue-500 rounded-full"
+                        style={{
+                          left: `${(trimStart / duration) * 100}%`,
+                          width: `${((trimEnd - trimStart) / duration) * 100}%`
+                        }}
+                      />
+                      <div
+                        className="absolute w-1 h-4 bg-white rounded-full transform -translate-y-1"
+                        style={{ left: `${(currentTime / duration) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <aside className="w-96 bg-gray-900/80 border-l border-gray-800 flex flex-col">
+          <div className="border-b border-gray-800">
+            <div className="flex">
+              {[
+                { id: 'trim', label: 'Trim', icon: Scissors },
+                { id: 'screenshot', label: 'Screenshot', icon: Camera },
+                { id: 'convert', label: 'Convert', icon: FileImage },
+                { id: 'extend', label: 'AI Extend', icon: Sparkles }
+              ].map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveEditorTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-4 text-xs font-medium transition-colors ${
+                      activeEditorTab === tab.id
+                        ? 'text-blue-400 border-b-2 border-blue-400 bg-gray-800/50'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex-1 p-6 overflow-y-auto">
+            {activeEditorTab === 'trim' && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className="text-white text-lg font-semibold">Trim Clip</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      Start Time: {trimStart.toFixed(1)}s
+                    </label>
+                    <input type="range" min="0" max={duration} step="0.1" value={trimStart} onChange={(e) => setTrimStart(Math.min(parseFloat(e.target.value), trimEnd - 0.5))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                      End Time: {trimEnd.toFixed(1)}s
+                    </label>
+                    <input type="range" min="0" max={duration} step="0.1" value={trimEnd} onChange={(e) => setTrimEnd(Math.max(parseFloat(e.target.value), trimStart + 0.5))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                  </div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-2">Clip Duration</h4>
+                  <p className="text-gray-300 text-sm">Original: {duration.toFixed(1)}s</p>
+                  <p className="text-blue-400 text-sm font-semibold">Trimmed: {(trimEnd - trimStart).toFixed(1)}s</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setCurrentTime(trimStart)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"><SkipBack className="w-4 h-4" /> Start</button>
+                  <button onClick={() => setCurrentTime(trimEnd)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"><SkipForward className="w-4 h-4" /> End</button>
+                </div>
+              </div>
+            )}
+            {/* Other editor tabs */}
+          </div>
+        </aside>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-gray-200 font-sans">
+      <style>{`
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      `}</style>
+      <header className="bg-gray-900/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-2">
+                <Video className="w-8 h-8 text-blue-500" />
+                <span className="text-white text-xl font-bold">SnipAI</span>
+              </div>
+              <nav className="hidden md:flex gap-2">
+                {[
+                  { id: 'search', label: 'Search Clips' },
+                  { id: 'generate', label: 'Generate AI' },
+                  { id: 'upload', label: 'Upload' }
+                ].map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {userId && (
+                <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-800 px-3 py-1.5 rounded-lg">
+                  <User className="w-4 h-4 text-gray-400"/>
+                  <span className="font-mono truncate max-w-[120px]">{userId}</span>
+                </div>
+              )}
+              <button className="text-gray-400 hover:text-white p-2 hover:bg-gray-800 rounded-lg transition-colors">
+                <Settings className="w-5 h-5" />
+              </button>
+              {userId ? (
+                 <button onClick={handleSignOut} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                   <LogOut className="w-4 h-4" />
+                   Sign Out
+                 </button>
+              ) : (
+                 <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                   Sign In
+                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'search' && (
+          <>
+            <div className="mb-8">
+              <div className="relative max-w-2xl mx-auto mb-6">
+                <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input type="text" value={searchQuery} onChange={(e) => handleSearch(e.target.value)} placeholder="Search for clips... e.g., 'Tom Cruise running' or 'explosion'" className="w-full bg-gray-900 text-white pl-14 pr-4 py-4 rounded-xl border border-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-lg transition-colors" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <button className="flex items-center gap-2 bg-gray-900 text-gray-300 hover:text-white px-4 py-2 rounded-lg transition-colors border border-gray-800">
+                    <Filter className="w-4 h-4" /> Filters
+                  </button>
+                  <span className="text-gray-400 text-sm">{isLoading ? "Loading clips..." : `${filteredClips.length} clips found`}</span>
+                </div>
+                <div className="flex items-center gap-2 p-1 bg-gray-900 rounded-lg border border-gray-800">
+                  <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}><Grid className="w-4 h-4" /></button>
+                  <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}><List className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+            {isLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <div className={`gap-6 ${viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'flex flex-col'}`}>
+                {filteredClips.map(clip => (<ClipCard key={clip.id} clip={clip} />))}
+              </div>
+            )}
+          </>
+        )}
+        {activeTab === 'generate' && <GenerationPanel />}
+        {activeTab === 'upload' && (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-gray-900 rounded-xl p-8 text-center border border-gray-800">
+              <Upload className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+              <h2 className="text-white text-2xl font-bold mb-4">Upload Your Clips</h2>
+              <p className="text-gray-400 mb-6">Share your clips with the community and help others find the perfect moment.</p>
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-medium transition-colors">Choose Files</button>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {isEditorOpen && <ClipEditor />}
+    </div>
+  );
+};
+
+export default SnipAI;
 
